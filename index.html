@@ -1,1 +1,297 @@
+<!DOCTYPE html>
+<html lang="ht">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Pilot Simulator - Avyon</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; font-family: Arial, sans-serif; }
+    #ui {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      color: #0f0;
+      background: rgba(0,0,0,0.65);
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 16px;
+      line-height: 1.6;
+      z-index: 10;
+      pointer-events: none;
+    }
+    #controls {
+      position: absolute;
+      bottom: 25px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 14px;
+      z-index: 10;
+    }
+    button {
+      width: 62px;
+      height: 62px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,255,255,0.25);
+      color: white;
+      font-size: 22px;
+      backdrop-filter: blur(6px);
+      cursor: pointer;
+    }
+    #info {
+      position: absolute;
+      bottom: 105px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      background: rgba(0,0,0,0.55);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 10;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <div>Vitès: <span id="speed">0</span> km/h</div>
+    <div>Altitid: <span id="alt">2</span> m</div>
+    <div>Throttle: <span id="thr">0</span>%</div>
+    <div>Manèt: <span id="pad">Pa konekte</span></div>
+  </div>
 
+  <div id="info">W/S Pitch | A/D Roll | ← → Yaw | ↑ ↓ Throttle | Manèt sipòte</div>
+
+  <div id="controls">
+    <button id="btnPitchUp">↑</button>
+    <button id="btnPitchDown">↓</button>
+    <button id="btnThrottleUp">+</button>
+    <button id="btnThrottleDown">-</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+  <script>
+    // ========== SCENE ==========
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87CEEB);
+    scene.fog = new THREE.Fog(0x87CEEB, 150, 2500);
+
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 5000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
+
+    // Limyè
+    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+    const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+    sun.position.set(100, 200, 80);
+    scene.add(sun);
+
+    // ========== TEREN + PIST ==========
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(5000, 5000),
+      new THREE.MeshLambertMaterial({ color: 0x3a7d44 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    const runway = new THREE.Mesh(
+      new THREE.PlaneGeometry(70, 900),
+      new THREE.MeshLambertMaterial({ color: 0x333333 })
+    );
+    runway.rotation.x = -Math.PI / 2;
+    runway.position.y = 0.15;
+    scene.add(runway);
+
+    // Liy blan
+    for (let i = -400; i <= 400; i += 45) {
+      const line = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.5, 22),
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
+      );
+      line.rotation.x = -Math.PI / 2;
+      line.position.set(0, 0.2, i);
+      scene.add(line);
+    }
+
+    // ========== AVYON ==========
+    const plane = new THREE.Group();
+
+    // Kò
+    const body = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.3, 1.6, 13, 10),
+      new THREE.MeshLambertMaterial({ color: 0xffffff })
+    );
+    body.rotation.z = Math.PI / 2;
+    plane.add(body);
+
+    // Zèl
+    const wing = new THREE.Mesh(
+      new THREE.BoxGeometry(20, 0.35, 3.2),
+      new THREE.MeshLambertMaterial({ color: 0xe8e8e8 })
+    );
+    wing.position.y = 0.4;
+    plane.add(wing);
+
+    // Ke
+    const tail = new THREE.Mesh(
+      new THREE.BoxGeometry(0.35, 3.2, 2.2),
+      new THREE.MeshLambertMaterial({ color: 0xe8e8e8 })
+    );
+    tail.position.set(-5.8, 1.6, 0);
+    plane.add(tail);
+
+    const hStab = new THREE.Mesh(
+      new THREE.BoxGeometry(5.5, 0.25, 1.6),
+      new THREE.MeshLambertMaterial({ color: 0xe8e8e8 })
+    );
+    hStab.position.set(-5.8, 0.9, 0);
+    plane.add(hStab);
+
+    // Cockpit
+    const cockpit = new THREE.Mesh(
+      new THREE.SphereGeometry(1.4, 10, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshLambertMaterial({ color: 0x88ccff, transparent: true, opacity: 0.75 })
+    );
+    cockpit.position.set(3.8, 0.9, 0);
+    cockpit.rotation.z = -Math.PI / 2;
+    plane.add(cockpit);
+
+    plane.position.set(0, 2.5, 320);
+    scene.add(plane);
+
+    // ========== ETA ==========
+    let speed = 0;
+    let throttle = 0;
+    let onGround = true;
+
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    // Bouton touch
+    const addTouch = (id, code) => {
+      const btn = document.getElementById(id);
+      btn.addEventListener('touchstart', e => { e.preventDefault(); keys[code] = true; });
+      btn.addEventListener('touchend', () => keys[code] = false);
+      btn.addEventListener('mousedown', () => keys[code] = true);
+      btn.addEventListener('mouseup', () => keys[code] = false);
+    };
+    addTouch('btnPitchUp', 'KeyW');
+    addTouch('btnPitchDown', 'KeyS');
+    addTouch('btnThrottleUp', 'ArrowUp');
+    addTouch('btnThrottleDown', 'ArrowDown');
+
+    // Gamepad
+    let gamepadIndex = null;
+    window.addEventListener("gamepadconnected", e => {
+      gamepadIndex = e.gamepad.index;
+      document.getElementById('pad').textContent = "Konekte ✓";
+    });
+    window.addEventListener("gamepaddisconnected", () => {
+      gamepadIndex = null;
+      document.getElementById('pad').textContent = "Pa konekte";
+    });
+
+    function getGamepad() {
+      if (gamepadIndex === null) return null;
+      const gp = navigator.getGamepads()[gamepadIndex];
+      return gp || null;
+    }
+
+    // ========== UPDATE ==========
+    function update(delta) {
+      const gp = getGamepad();
+
+      // Throttle
+      if (keys['ArrowUp']) throttle = Math.min(1, throttle + 0.5 * delta);
+      if (keys['ArrowDown']) throttle = Math.max(0, throttle - 0.5 * delta);
+      if (gp && gp.buttons[7]) throttle = gp.buttons[7].value; // Right trigger
+
+      // Inputs
+      let pitchInput = 0, rollInput = 0, yawInput = 0;
+      if (keys['KeyW']) pitchInput = 1;
+      if (keys['KeyS']) pitchInput = -1;
+      if (keys['KeyA']) rollInput = 1;
+      if (keys['KeyD']) rollInput = -1;
+      if (keys['ArrowLeft']) yawInput = 1;
+      if (keys['ArrowRight']) yawInput = -1;
+
+      if (gp) {
+        pitchInput = -gp.axes[1];
+        rollInput = -gp.axes[0];
+        yawInput = -gp.axes[2];
+      }
+
+      // Fizik
+      const accel = throttle * 90 - speed * 0.07;
+      speed += accel * delta;
+      if (speed < 0) speed = 0;
+
+      if (onGround) {
+        if (speed > 170) onGround = false;
+        if (keys['Space'] || (gp && gp.buttons[0] && gp.buttons[0].pressed)) {
+          speed = Math.max(0, speed - 70 * delta);
+        }
+      }
+
+      // Rotation
+      const sens = 0.9;
+      plane.rotation.x += pitchInput * sens * delta;
+      plane.rotation.z += rollInput * sens * delta;
+      plane.rotation.y += yawInput * sens * delta;
+      plane.rotation.x = Math.max(-0.75, Math.min(0.75, plane.rotation.x));
+
+      // Mouvman
+      const dir = new THREE.Vector3(0, 0, -1);
+      dir.applyQuaternion(plane.quaternion);
+      plane.position.add(dir.multiplyScalar(speed * 0.16 * delta));
+
+      // Gravity / Lift
+      if (!onGround) {
+        const lift = speed * 0.0022;
+        plane.position.y += (lift - 1.6) * delta;
+        if (plane.position.y < 2.5) {
+          plane.position.y = 2.5;
+          onGround = true;
+          plane.rotation.x *= 0.4;
+        }
+      } else {
+        plane.position.y = 2.5;
+      }
+
+      // Camera
+      const offset = new THREE.Vector3(0, 7, 20);
+      offset.applyQuaternion(plane.quaternion);
+      camera.position.copy(plane.position).add(offset);
+      camera.lookAt(plane.position);
+
+      // UI
+      document.getElementById('speed').textContent = Math.round(speed);
+      document.getElementById('alt').textContent = Math.round(plane.position.y);
+      document.getElementById('thr').textContent = Math.round(throttle * 100);
+    }
+
+    // ========== LOOP ==========
+    let last = performance.now();
+    function animate(now) {
+      const delta = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      update(delta);
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    animate(performance.now());
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
